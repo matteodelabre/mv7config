@@ -1,7 +1,9 @@
-from mv7config.device import list_devices, TextHID
+import sys
 import readline
 import threading
 import time
+from mv7config.text_hid import TextHID
+from mv7config.microphone import Microphone
 
 
 prompt = "> "
@@ -29,9 +31,13 @@ class ReaderThread(threading.Thread):
 
 
 def main():
-    available_devices = list_devices()
+    available_devices = Microphone.enumerate()
 
-    with TextHID(available_devices[0]) as device:
+    if not available_devices:
+        print("No MV7 microphone found")
+        sys.exit(1)
+
+    with TextHID(next(iter(available_devices))) as device:
         thread = ReaderThread(device)
         thread.start()
 

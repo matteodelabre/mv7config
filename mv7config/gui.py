@@ -3,7 +3,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Handy", "1")
 from gi.repository import Gtk, Handy
-from .device import list_devices
+from .microphone import Microphone
 
 
 class NoMicrophonePage(Handy.StatusPage):
@@ -40,7 +40,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
             round_digits=0,
             digits=0,
         )
-        self.input_volume_scale.set_range(0, 36)
+        self.input_volume_scale.set_range(0, 3600)
         self.input_volume_scale.set_increments(1, 1)
         input_volume_controls.add(self.input_volume_scale)
 
@@ -65,7 +65,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
             round_digits=0,
             digits=0,
         )
-        self.output_volume_scale.set_range(-24, 0)
+        self.output_volume_scale.set_range(-2400, 0)
         self.output_volume_scale.set_increments(1, 1)
         output_volume_controls.add(self.output_volume_scale)
 
@@ -173,7 +173,7 @@ class AppWindow(Gtk.ApplicationWindow):
         self.discover_mics()
 
     def discover_mics(self, button=None):
-        mics = list_devices()
+        mics = Microphone.enumerate()
 
         if not mics:
             self.show_no_mic_page()
