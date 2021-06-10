@@ -1,5 +1,5 @@
 import sys
-from mv7config.gui.app import App
+from mv7config.gui import Application
 
-app = App()
+app = Application()
 app.run(sys.argv)
