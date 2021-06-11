@@ -253,6 +253,9 @@ class Microphone(GObject.Object):
     def _notify_on_main_thread(self, prop_name):
         GLib.idle_add(lambda: self.notify(prop_name))
 
+    def identify(self):
+        self._device.send_command("identify")
+
     def close(self):
         self._stop_event.set()
         self._reader_thread.join()

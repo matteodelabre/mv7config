@@ -457,19 +457,6 @@ class MicrophoneControlPage(Handy.PreferencesPage):
         equalizer_list.add(presence_row)
 
 
-class LockButton(Gtk.ToggleButton):
-    def __init__(self, label="Lock"):
-        super().__init__()
-        container = Gtk.Box(spacing=6)
-        self.add(container)
-
-        image = Gtk.Image(icon_name="system-lock-screen-symbolic")
-        container.add(image)
-
-        label = Gtk.Label(label=label)
-        container.add(label)
-
-
 class AppState(Enum):
     Uninitialized = auto()
     NoMicrophone = auto()
@@ -549,17 +536,26 @@ class AppWindow(Gtk.ApplicationWindow):
             self.remove(self.get_child())
 
         control_header_bar = Handy.HeaderBar(
-            title=self.props.title,
+            title=self._microphone.props.serial_number,
             show_close_button=True,
         )
-        control_lock = LockButton()
-
-        self._microphone.bind_property(
-            "lock", control_lock, "active",
-            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+        lock_toggle = Gtk.ToggleButton(
+            image=Gtk.Image(icon_name="system-lock-screen-symbolic"),
+        )
+        identify_button = Gtk.Button(
+            image=Gtk.Image(icon_name="keyboard-brightness-symbolic"),
         )
 
-        control_header_bar.pack_start(control_lock)
+        self._microphone.bind_property(
+            "lock", lock_toggle, "active",
+            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+        )
+        identify_button.connect(
+            "clicked", lambda _: self._microphone.identify()
+        )
+
+        control_header_bar.pack_start(lock_toggle)
+        control_header_bar.pack_start(identify_button)
         self.set_titlebar(control_header_bar)
 
         control_page = MicrophoneControlPage(self._microphone)
