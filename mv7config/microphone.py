@@ -1,9 +1,9 @@
-import time
 import threading
 from typing import Any, Callable
 from dataclasses import dataclass
 from enum import Enum
-from gi.repository import GObject
+import time
+from gi.repository import GObject, GLib
 import hid
 from .text_hid import TextHID
 
@@ -15,9 +15,9 @@ mv7_data_interface = 3
 
 class CompressorState(Enum):
     Off = 0
-    Low = 1
+    Light = 1
     Medium = 2
-    High = 3
+    Heavy = 3
 
 
 class AutoDistanceState(Enum):
@@ -144,13 +144,13 @@ microphone_properties = [
         local_name="high_pass_filter",
         fetch_command="getBlock 31",
         receive_command="31",
-        parse_remote=lambda x: int(x, 16) & 1 == 1,
+        parse_remote=lambda x: int(x, 16) & 1 != 0,
     ),
     MicrophoneProperty(
         local_name="presence_filter",
         fetch_command="getBlock 31",
         receive_command="31",
-        parse_remote=lambda x: int(x, 16) & 2 == 1,
+        parse_remote=lambda x: int(x, 16) & 2 != 0,
     ),
     MicrophoneProperty(
         local_name="auto_distance",
@@ -203,19 +203,30 @@ class Microphone(GObject.Object):
         # Fill in metadata and state information
         initialized = False
 
-        while not self._stop_event.is_set():
-            if not initialized:
+        while not initialized:
+            commands = set()
+
+            for prop in microphone_properties:
+                if prop.local_name not in self._state:
+                    commands.add(prop.fetch_command)
+
+            if commands:
+                # Send requests for missing state
+                for command in commands:
+                    self._device.send_command(command)
+
+                # Give time to the device to respond
+                time.sleep(.5)
+
+                while (message := self._device.read_message(timeout_ms=200)):
+                    self._parse_message(message)
+            else:
+                GLib.idle_add(lambda: self.emit("initialized"))
                 initialized = True
 
-                # Initialization phase: request missing properties
-                for prop in microphone_properties:
-                    if prop.local_name not in self._state:
-                        self._device.send_command(prop.fetch_command)
-                        initialized = False
 
-                if initialized:
-                    self.emit("initialized")
-
+        # Listen for messages from the device
+        while not self._stop_event.is_set():
             message = self._device.read_message(timeout_ms=200)
             if message:
                 self._parse_message(message)
@@ -223,7 +234,7 @@ class Microphone(GObject.Object):
     def _parse_message(self, message):
         if "=" in message:
             key, value = message.strip().split("=", maxsplit=1)
-        elif message.startswith("block "):
+        elif message.startswith("block ") and "Not valid" not in message:
             key, value = message[6:].strip().split(" ", maxsplit=1)
         else:
             return
@@ -237,7 +248,10 @@ class Microphone(GObject.Object):
                     or next_value != self._state[prop.local_name]
                 ):
                     self._state[prop.local_name] = next_value
-                    self.notify(prop.local_name)
+                    self._notify_on_main_thread(prop.local_name)
+
+    def _notify_on_main_thread(self, prop_name):
+        GLib.idle_add(lambda: self.notify(prop_name))
 
     def close(self):
         self._stop_event.set()
@@ -250,23 +264,23 @@ class Microphone(GObject.Object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-    @GObject.Property
+    @GObject.Property(type=str)
     def package_version(self):
         return self._state["package_version"]
 
-    @GObject.Property
+    @GObject.Property(type=str)
     def firmware_version(self):
         return self._state["firmware_version"]
 
-    @GObject.Property
+    @GObject.Property(type=str)
     def dsp_version(self):
         return self._state["dsp_version"]
 
-    @GObject.Property
+    @GObject.Property(type=str)
     def serial_number(self):
         return self._state["serial_number"]
 
-    @GObject.Property
+    @GObject.Property(type=bool, default=False)
     def lock(self):
         return self._state["lock"]
 
@@ -276,7 +290,7 @@ class Microphone(GObject.Object):
             self._state["lock"] = value
             self._device.send_command("lock on" if value else "lock off")
 
-    @GObject.Property
+    @GObject.Property(type=bool, default=False)
     def monitor_mute(self):
         return self._state["monitor_mute"]
 
@@ -286,7 +300,7 @@ class Microphone(GObject.Object):
             self._state["monitor_mute"] = value
             self._device.send_command("audioMute on" if value else "audioMute off")
 
-    @GObject.Property
+    @GObject.Property(type=int, default=0, minimum=-2400, maximum=0)
     def monitor_volume(self):
         return self._state["monitor_volume"]
 
@@ -298,7 +312,7 @@ class Microphone(GObject.Object):
             send_value = send_value[:-2] + "." + send_value[-2:]
             self._device.send_command(f"volume {send_value}")
 
-    @GObject.Property
+    @GObject.Property(type=int, default=0x20C5, minimum=0x20C5, maximum=0x4026E7)
     def monitor_mix_mic(self):
         return self._state["monitor_mix_mic"]
 
@@ -308,7 +322,7 @@ class Microphone(GObject.Object):
             self._state["monitor_mix_mic"] = max(min(value, 0x4026E7), 0x20C5)
             self._send_monitor_mix()
 
-    @GObject.Property
+    @GObject.Property(type=int, default=0x20C5, minimum=0x20C5, maximum=0x2026F3)
     def monitor_mix_pc(self):
         return self._state["monitor_mix_pc"]
 
@@ -319,11 +333,11 @@ class Microphone(GObject.Object):
             self._send_monitor_mix()
 
     def _send_monitor_mix(self):
-        msb = hex(self._state["monitor_mix_pc"])[2:].zfill(8)
-        lsb = hex(self._state["monitor_mix_mic"])[2:].zfill(8)
+        msb = hex(self._state["monitor_mix_pc"])[2:].zfill(8).upper()
+        lsb = hex(self._state["monitor_mix_mic"])[2:].zfill(8).upper()
         self._device.send_command(f"setBlock 22 {msb}{lsb}")
 
-    @GObject.Property(type=bool, default=True)
+    @GObject.Property(type=bool, default=False)
     def input_mute(self):
         return self._state["input_mute"]
 
@@ -333,7 +347,7 @@ class Microphone(GObject.Object):
             self._state["input_mute"] = value
             self._device.send_command("micMute on" if value else "micMute off")
 
-    @GObject.Property
+    @GObject.Property(type=int, default=0, minimum=0, maximum=3600)
     def input_volume(self):
         return self._state["input_volume"]
 
@@ -356,7 +370,7 @@ class Microphone(GObject.Object):
             send_value = str(value.value).zfill(8)
             self._device.send_command(f"setBlock 19 {send_value}")
 
-    @GObject.Property
+    @GObject.Property(type=bool, default=False)
     def limiter(self):
         return self._state["limiter"]
 
@@ -367,7 +381,7 @@ class Microphone(GObject.Object):
             send_value = "00000001" if value else "00000000"
             self._device.send_command(f"setBlock 1F {send_value}")
 
-    @GObject.Property
+    @GObject.Property(type=bool, default=False)
     def high_pass_filter(self):
         return self._state["high_pass_filter"]
 
@@ -377,7 +391,7 @@ class Microphone(GObject.Object):
             self._state["high_pass_filter"] = value
             self._send_equalizer()
 
-    @GObject.Property
+    @GObject.Property(type=bool, default=False)
     def presence_filter(self):
         return self._state["presence_filter"]
 
