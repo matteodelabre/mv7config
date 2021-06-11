@@ -168,10 +168,16 @@ microphone_properties = [
 
 
 class Microphone(GObject.Object):
+    __gsignals__ = {
+        'initialized': (GObject.SIGNAL_RUN_FIRST, None, ()),
+    }
+
     def __init__(self, path):
         super().__init__()
         self._device = TextHID(path)
         self._state = {}
+        self._stop_event = threading.Event()
+        self._reader_thread = threading.Thread(target=self._reader_thread_run)
 
     def enumerate():
         return {
@@ -181,48 +187,38 @@ class Microphone(GObject.Object):
         }
 
     def initialize(self):
-        self._device.hid.set_nonblocking(False)
-        self._reader_thread = threading.Thread(target=self._reader_thread_run)
+        self._reader_thread.start()
 
-        self._state = {}
-
+    def _reader_thread_run(self):
         # Set user to admin, otherwise some commands are not usable
         self._device.send_command("su adm")
-        response = self._device.read_message()
-        assert response == "su=adm\n"
+        while self._device.read_message() != "su=adm\n":
+            pass
 
         # Wait until the DSP has booted
         self._device.send_command("bootDSP C")
-
         while self._device.read_message() != "dspBooted\n":
-            time.sleep(.05)
+            pass
 
         # Fill in metadata and state information
-        self._running = True
-        self._reader_thread.start()
-
         initialized = False
 
-        while not initialized:
-            initialized = True
+        while not self._stop_event.is_set():
+            if not initialized:
+                initialized = True
 
-            for prop in microphone_properties:
-                if prop.local_name not in self._state:
-                    self._device.send_command(prop.fetch_command)
-                    initialized = False
+                # Initialization phase: request missing properties
+                for prop in microphone_properties:
+                    if prop.local_name not in self._state:
+                        self._device.send_command(prop.fetch_command)
+                        initialized = False
 
-            time.sleep(.5)
+                if initialized:
+                    self.emit("initialized")
 
-    def _reader_thread_run(self):
-        self._device.hid.set_nonblocking(True)
-
-        while self._running:
-            message = self._device.read_message()
-
+            message = self._device.read_message(timeout_ms=200)
             if message:
                 self._parse_message(message)
-
-            time.sleep(0.05)
 
     def _parse_message(self, message):
         if "=" in message:
@@ -244,9 +240,8 @@ class Microphone(GObject.Object):
                     self.notify(prop.local_name)
 
     def close(self):
-        self._running = False
+        self._stop_event.set()
         self._reader_thread.join()
-        self._state = {}
         self._device.close()
 
     def __enter__(self):

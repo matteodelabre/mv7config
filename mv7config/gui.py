@@ -204,11 +204,6 @@ class AppWindow(Gtk.ApplicationWindow):
             show_close_button=True,
         )
         control_lock = LockButton()
-        # control_lock = Gtk.ToggleButton(
-        #     label="Lock",
-        #     image=Gtk.Image(icon_name="system-lock-screen-symbolic"),
-        #     always_show_image=True,
-        # )
 
         control_header_bar.pack_start(control_lock)
         self.set_titlebar(control_header_bar)

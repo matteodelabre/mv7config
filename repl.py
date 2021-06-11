@@ -11,12 +11,12 @@ prompt = "> "
 class ReaderThread(threading.Thread):
     def __init__(self, device):
         super().__init__()
-        self.device = device
-        self.stop = threading.Event()
+        self._device = device
+        self._stop_event = threading.Event()
 
     def run(self):
-        while not self.stop.is_set():
-            message = self.device.read_message(timeout_ms=500)
+        while not self._stop_event.is_set():
+            message = self._device.read_message(timeout_ms=200)
 
             if message:
                 print(
@@ -24,6 +24,10 @@ class ReaderThread(threading.Thread):
                     prompt, readline.get_line_buffer(),
                     sep="", end="", flush=True
                 )
+
+    def stop(self):
+        self._stop_event.set()
+        self.join()
 
 
 def main():
@@ -50,8 +54,7 @@ def main():
 
             print()
 
-        thread.stop.set()
-        thread.join()
+        thread.stop()
 
 
 if __name__ == "__main__":
