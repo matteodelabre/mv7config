@@ -1,7 +1,6 @@
 import sys
 import readline
 import threading
-import time
 from mv7config.text_hid import TextHID
 from mv7config.microphone import Microphone
 
@@ -13,12 +12,11 @@ class ReaderThread(threading.Thread):
     def __init__(self, device):
         super().__init__()
         self.device = device
-        self.device.hid.set_nonblocking(1)
-        self.stop = False
+        self.stop = threading.Event()
 
     def run(self):
-        while not self.stop:
-            message = self.device.read_message()
+        while not self.stop.is_set():
+            message = self.device.read_message(timeout_ms=500)
 
             if message:
                 print(
@@ -26,8 +24,6 @@ class ReaderThread(threading.Thread):
                     prompt, readline.get_line_buffer(),
                     sep="", end="", flush=True
                 )
-
-            time.sleep(0.05)
 
 
 def main():
@@ -54,7 +50,7 @@ def main():
 
             print()
 
-        thread.stop = True
+        thread.stop.set()
         thread.join()
 
 

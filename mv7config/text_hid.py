@@ -19,8 +19,8 @@ class TextHID:
         command = [ord(char) for char in data[:64]]
         self.hid.write(command + [0] * (64 - len(command)))
 
-    def read_message(self):
-        data = self.hid.read(max_length=64)
+    def read_message(self, timeout_ms=0):
+        data = self.hid.read(max_length=64, timeout_ms=timeout_ms)
 
         if not data:
             return None
