@@ -455,7 +455,15 @@ class Microphone(GObject.Object):
     @input_volume.setter
     def input_volume(self, value):
         if value != self._state["input_volume"]:
-            self._state["input_volume"] = send_value = max(min(value, 3600), 0)
+            send_value = max(min(value, 3600), 0)
+            half_distance = send_value % 50
+
+            if 0 < half_distance < 25:
+                send_value -= half_distance
+            elif half_distance >= 25:
+                send_value += (50 - half_distance)
+
+            self._state["input_volume"] = send_value
             self._device.send_command(f"inputGain {send_value / 100:.2f}")
 
     @GObject.Property
