@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk+" version="3.20"/>
+  <requires lib="libhandy" version="1.2"/>
+  <template class="MicrophoneControlPage" parent="HdyPreferencesPage">
+    <child>
+      <object class="HdyPreferencesGroup">
+        <property name="title">Monitor</property>
+        <child>
+          <object class="GtkListBox">
+            <property name="selection-mode">none</property>
+            <child>
+              <!-- Volume of the audio loopback -->
+              <object class="HdyActionRow">
+                <property name="title">Monitor volume</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <property name="hexpand">True</property>
+                    <child>
+                      <object class="GtkScale" id="monitor_volume">
+                        <property name="hexpand">True</property>
+                        <property name="draw-value">False</property>
+                        <property name="round-digits">0</property>
+                        <property name="digits">0</property>
+                        <property name="adjustment">monitor_volume_adjustment</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkToggleButton" id="monitor_mute">
+                        <property name="valign">center</property>
+                        <property name="relief">none</property>
+                        <property name="image">monitor_mute_image</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <!-- Balance between PC in and mic in -->
+              <object class="HdyActionRow">
+                <property name="title">Monitor mix</property>
+                <child>
+                  <object class="DualScale" id="monitor_mix">
+                    <property name="first-range-min">8389</property>
+                    <property name="first-range-max">4204263</property>
+                    <property name="second-range-min">8389</property>
+                    <property name="second-range-max">2107123</property>
+                    <property name="first-label">Mic off</property>
+                    <property name="second-label">PC off</property>
+                    <property name="step-increment">200000</property>
+                    <property name="page-increment">200000</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="HdyPreferencesGroup">
+        <property name="title">Signal processing</property>
+        <child>
+          <object class="GtkListBox">
+            <property name="selection-mode">none</property>
+            <child>
+              <!-- Switch between auto and manual modes -->
+              <object class="HdyActionRow">
+                <property name="title">Mode</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">True</property>
+                    <property name="valign">center</property>
+                    <property name="halign">end</property>
+                    <child>
+                      <object class="GtkRadioButton" id="mode_manual">
+                        <property name="label">Manual</property>
+                        <property name="draw-indicator">False</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkRadioButton" id="mode_auto">
+                        <property name="label">Automatic</property>
+                        <property name="draw-indicator">False</property>
+                        <property name="group">mode_manual</property>
+                      </object>
+                    </child>
+                    <style>
+                      <class name="linked" />
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="mode_stack_parent">
+                <property name="transition-type">crossfade</property>
+                <property name="vhomogeneous">False</property>
+                <property name="interpolate-size">True</property>
+                <child>
+                  <!-- Loading indicator shown when switching modes -->
+                  <object class="GtkBox" id="mode_loading_box">
+                    <property name="halign">center</property>
+                    <property name="border-width">20</property>
+                    <child>
+                      <object class="GtkSpinner">
+                        <property name="active">True</property>
+                        <property name="visible">True</property>
+                        <property name="width-request">40</property>
+                        <property name="height-request">40</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <!-- Manual mode settings -->
+                  <object class="GtkListBox" id="mode_manual_box">
+                    <property name="selection-mode">none</property>
+                    <child>
+                      <!-- Input volume and mute -->
+                      <object class="HdyActionRow">
+                        <property name="title">Input volume</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">6</property>
+                            <property name="hexpand">True</property>
+                            <child>
+                              <object class="GtkScale" id="input_volume">
+                                <property name="hexpand">True</property>
+                                <property name="draw-value">False</property>
+                                <property name="round-digits">0</property>
+                                <property name="digits">0</property>
+                                <property name="adjustment">input_volume_adjustment</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkToggleButton" id="input_mute">
+                                <property name="valign">center</property>
+                                <property name="relief">none</property>
+                                <property name="image">input_mute_image</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Compressor -->
+                      <object class="HdyActionRow">
+                        <property name="title">Compressor</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="hexpand">True</property>
+                            <property name="valign">center</property>
+                            <property name="halign">end</property>
+                            <child>
+                              <object class="GtkRadioButton" id="compressor_off">
+                                <property name="label">Off</property>
+                                <property name="draw-indicator">False</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="compressor_light">
+                                <property name="label">Light</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">compressor_off</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="compressor_medium">
+                                <property name="label">Medium</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">compressor_off</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="compressor_heavy">
+                                <property name="label">Heavy</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">compressor_off</property>
+                              </object>
+                            </child>
+                            <style>
+                              <class name="linked" />
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Limiter -->
+                      <object class="HdyActionRow">
+                        <property name="title">Limiter</property>
+                        <child>
+                          <object class="GtkSwitch" id="limiter">
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- High pass filter -->
+                      <object class="HdyActionRow">
+                        <property name="title">High pass filter</property>
+                        <child>
+                          <object class="GtkSwitch" id="high_pass_filter">
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Presence filter -->
+                      <object class="HdyActionRow">
+                        <property name="title">Presence filter</property>
+                        <child>
+                          <object class="GtkSwitch" id="presence_filter">
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <!-- Auto mode settings -->
+                  <object class="GtkListBox" id="mode_auto_box">
+                    <property name="selection-mode">none</property>
+                    <child>
+                      <object class="HdyActionRow">
+                        <property name="title">Input mute</property>
+                        <child>
+                          <object class="GtkSwitch" id="input_mute_auto">
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Distance -->
+                      <object class="HdyActionRow">
+                        <property name="title">Distance</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="hexpand">True</property>
+                            <property name="valign">center</property>
+                            <property name="halign">end</property>
+                            <child>
+                              <object class="GtkRadioButton" id="distance_close">
+                                <property name="label">Close</property>
+                                <property name="draw-indicator">False</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="distance_far">
+                                <property name="label">Far</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">distance_close</property>
+                              </object>
+                            </child>
+                            <style>
+                              <class name="linked" />
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Tone -->
+                      <object class="HdyActionRow">
+                        <property name="title">Tone</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="hexpand">True</property>
+                            <property name="valign">center</property>
+                            <property name="halign">end</property>
+                            <child>
+                              <object class="GtkRadioButton" id="tone_neutral">
+                                <property name="label">Neutral</property>
+                                <property name="draw-indicator">False</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="tone_dark">
+                                <property name="label">Dark</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">tone_neutral</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkRadioButton" id="tone_bright">
+                                <property name="label">Bright</property>
+                                <property name="draw-indicator">False</property>
+                                <property name="group">tone_neutral</property>
+                              </object>
+                            </child>
+                            <style>
+                              <class name="linked" />
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+  <object class="GtkAdjustment" id="monitor_volume_adjustment">
+    <property name="lower">-2400</property>
+    <property name="upper">0</property>
+    <property name="step-increment">100</property>
+    <property name="page-increment">100</property>
+  </object>
+  <object class="GtkImage" id="monitor_mute_image">
+    <property name="icon-name">audio-volume-muted-symbolic</property>
+  </object>
+  <object class="GtkAdjustment" id="input_volume_adjustment">
+    <property name="lower">0</property>
+    <property name="upper">3600</property>
+    <property name="step-increment">100</property>
+    <property name="page-increment">100</property>
+  </object>
+  <object class="GtkImage" id="input_mute_image">
+    <property name="icon-name">microphone-sensitivity-muted-symbolic</property>
+  </object>
+</interface>

@@ -20,6 +20,9 @@ mv7_data_interface = 3
 
 class Mode(Enum):
     """Modes for the Shure MV7 DSP."""
+    # Currently switching between the two modes
+    Loading = 0
+
     # Filters are tuned by the user
     Manual = 1
 
@@ -220,9 +223,6 @@ class Microphone(GObject.Object):
     __gsignals__ = {
         # Emitted when an instance has finished fetching its initial state
         "initialized": (GObject.SIGNAL_RUN_FIRST, None, ()),
-
-        # Emitted when fields have been re-fetched following a mode switch
-        "mode-switched": (GObject.SIGNAL_RUN_FIRST, None, ()),
     }
 
     def __init__(self, path):
@@ -235,6 +235,8 @@ class Microphone(GObject.Object):
         super().__init__()
         self._device = TextHID(path)
         self._state = {}
+        self._switching_modes_sending = threading.Event()
+        self._switching_modes_fetching = threading.Event()
         self._stop_event = threading.Event()
         self._reader_thread = threading.Thread(target=self._reader_thread_run)
 
@@ -270,23 +272,17 @@ class Microphone(GObject.Object):
 
         while not self._stop_event.is_set():
             # Fetch missing fields (if the DSP mode was changed)
-            did_switch_mode = False
-
-            while True:
-                did_fetch = self._fetch_fields()
-
-                if did_fetch:
-                    did_switch_mode = True
-                else:
-                    break
-
-            if did_switch_mode:
-                GLib.idle_add(lambda: self.emit("mode-switched"))
-
             message = self._device.read_message(timeout_ms=200)
 
             if message:
                 self._parse_message(message)
+
+            if self._switching_modes_fetching.is_set():
+                while self._fetch_fields():
+                    pass
+
+                self._switching_modes_fetching.clear()
+                self._notify_on_main_thread("mode")
 
     def _fetch_fields(self):
         """Fetch all missing fields in the _state dict."""
@@ -329,6 +325,8 @@ class Microphone(GObject.Object):
 
                 if local_name == "mode":
                     for reset_key in mode_reset:
+                        self._switching_modes_sending.clear()
+                        self._switching_modes_fetching.set()
                         self._state.pop(reset_key, None)
 
                 if (
@@ -430,12 +428,19 @@ class Microphone(GObject.Object):
 
     @GObject.Property
     def mode(self):
-        return self._state.get("mode", None)
+        if (
+            self._switching_modes_sending.is_set()
+            or self._switching_modes_fetching.is_set()
+        ):
+            return Mode.Loading
+        else:
+            return self._state.get("mode", None)
 
     @mode.setter
     def mode(self, value):
         if value != self._state["mode"]:
             self._state["mode"] = value
+            self._switching_modes_sending.set()
             self._device.send_command(f"dspMode {value.value}")
 
     @GObject.Property(type=bool, default=False)
