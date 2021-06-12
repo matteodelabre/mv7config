@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=0.1
+Encoding=UTF-8
+Name=mv7config
+Comment=Configure Shure MV7 Microphones
+Exec=mv7config
+Icon=multimedia-volume-control
+Terminal=false
+Type=Application
+StartupNotify=true
+Categories=GTK;Settings;HardwareSettings;
