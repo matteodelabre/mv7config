@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk+" version="3.20"/>
+  <requires lib="libhandy" version="1.2"/>
+  <template class="AppWindow" parent="GtkApplicationWindow">
+    <child type="titlebar">
+      <object class="GtkStack" id="header_stack">
+        <child>
+          <object class="HdyHeaderBar" id="header_basic">
+            <property name="title">mv7config</property>
+            <property name="show-close-button">True</property>
+          </object>
+        </child>
+        <child>
+          <object class="HdyHeaderBar" id="header_mic_control">
+            <property name="title">mv7config</property>
+            <property name="show-close-button">True</property>
+            <child>
+              <object class="GtkToggleButton" id="lock_toggle">
+                <property name="image">lock_toggle_image</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="identify_button">
+                <property name="image">identify_button_image</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="page_stack">
+        <property name="transition-type">crossfade</property>
+        <child>
+          <!-- Empty status page shown when no MV7 is connected -->
+          <object class="HdyStatusPage" id="page_no_mic">
+            <property name="title">No MV7 found</property>
+            <property name="description">Check that your microphone is plugged in and try again.</property>
+            <property name="icon_name">audio-input-microphone-symbolic</property>
+            <child>
+              <object class="GtkButton" id="retry_button">
+                <property name="label">Retry</property>
+                <property name="halign">center</property>
+                <style>
+                  <class name="suggested-action" />
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <!-- Loading page shown while fetching a mic’s properties -->
+          <object class="GtkBox" id="page_mic_init">
+            <property name="orientation">vertical</property>
+            <property name="valign">center</property>
+            <property name="spacing">26</property>
+            <child>
+              <object class="GtkSpinner">
+                <property name="active">True</property>
+                <property name="visible">True</property>
+                <property name="width-request">80</property>
+                <property name="height-request">80</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label"><![CDATA[<big>Initializing…</big>]]></property>
+                <property name="use-markup">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="MicrophoneControlPage" id="page_mic_control" />
+        </child>
+      </object>
+    </child>
+  </template>
+  <object class="GtkImage" id="lock_toggle_image">
+    <property name="icon-name">system-lock-screen-symbolic</property>
+  </object>
+  <object class="GtkImage" id="identify_button_image">
+    <property name="icon-name">keyboard-brightness-symbolic</property>
+  </object>
+</interface>
