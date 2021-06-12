@@ -2,9 +2,10 @@ from enum import Enum, auto
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Handy", "1")
-from gi.repository import GObject, Gtk, Handy
+from gi.repository import Gtk, Handy
 from gi.repository.GObject import BindingFlags
-from .microphone import Microphone, CompressorState
+from .microphone import Microphone, Mode, CompressorState, DistanceState, ToneState
+from .dual_scale import DualScale
 
 
 class NoMicrophonePage(Handy.StatusPage):
@@ -49,17 +50,20 @@ class BindRadio:
             for key, value in mapping.items()
         }
 
-        for action in mapping:
-            action.connect("toggled", self.on_toggled)
+        for button in mapping:
+            if button is not None:
+                button.connect("toggled", self._on_toggled)
 
-        self.on_changed()
-        target.connect("notify::" + prop, lambda x, y: self.on_changed())
+        self._on_changed()
+        target.connect("notify::" + prop, lambda x, y: self._on_changed())
 
-    def on_changed(self):
+    def _on_changed(self):
         button = self._reverse_mapping[self._target.get_property(self._prop)]
-        button.set_active(True)
 
-    def on_toggled(self, action):
+        if button is not None:
+            button.set_active(True)
+
+    def _on_toggled(self, action):
         if action.props.active:
             next_value = self._mapping[action]
 
@@ -67,252 +71,16 @@ class BindRadio:
                 self._target.set_property(self._prop, next_value)
 
 
-class DualScale(Gtk.Box):
-    def __init__(
-        self,
-        first_range, second_range,
-        labels, increments,
-        *args, **kwargs
-    ):
-        super().__init__(*args, **kwargs, spacing=6)
-
-        self._first_range = first_range
-        self._first_value = first_range[1]
-        self._second_range = second_range
-        self._second_value = second_range[1]
-
-        self._max_gap = max(
-            first_range[1] - first_range[0],
-            second_range[1] - second_range[0],
-        )
-
-        self._unlinked_scales = Gtk.Box(hexpand=True, spacing=0)
-
-        self._first_scale = Gtk.Scale(
-            hexpand=True,
-            draw_value=False,
-            round_digits=0,
-            digits=0,
-        )
-        self._first_adj = self._first_scale.get_adjustment()
-        self._first_scale.set_range(*first_range)
-        self._first_scale.set_increments(*increments)
-        self._first_scale.add_mark(
-            first_range[0],
-            Gtk.PositionType.BOTTOM,
-            labels[0],
-        )
-        self._unlinked_scales.add(self._first_scale)
-
-        self._second_scale = Gtk.Scale(
-            hexpand=True,
-            draw_value=False,
-            round_digits=0,
-            digits=0,
-            inverted=True,
-        )
-        self._second_adj = self._second_scale.get_adjustment()
-        self._second_scale.set_range(*second_range)
-        self._second_scale.set_increments(*increments)
-        self._second_scale.add_mark(
-            second_range[0],
-            Gtk.PositionType.BOTTOM,
-            labels[1],
-        )
-        self._unlinked_scales.add(self._second_scale)
-        self.pack_start(
-            self._unlinked_scales,
-            expand=True,
-            fill=True,
-            padding=0
-        )
-        self._unlinked_scales.set_no_show_all(True)
-
-        self._linked_scale = Gtk.Scale(
-            hexpand=True,
-            draw_value=False,
-            round_digits=0,
-            digits=0,
-            has_origin=False,
-        )
-        self._linked_adj = self._linked_scale.get_adjustment()
-        self._linked_scale.set_range(0, self._max_gap * 2)
-        self._linked_scale.set_increments(*increments)
-        self._linked_scale.add_mark(
-            0,
-            Gtk.PositionType.BOTTOM,
-            labels[0],
-        )
-        self._linked_scale.add_mark(
-            self._max_gap,
-            Gtk.PositionType.BOTTOM,
-            "",
-        )
-        self._linked_scale.add_mark(
-            self._max_gap * 2,
-            Gtk.PositionType.BOTTOM,
-            labels[1],
-        )
-        self.pack_start(
-            self._linked_scale,
-            expand=True,
-            fill=True,
-            padding=0
-        )
-        self._linked_scale.set_no_show_all(True)
-
-        self._link = Gtk.ToggleButton(
-            image=Gtk.Image(icon_name="insert-link-symbolic"),
-            valign="center",
-            relief="none",
-            active=True,
-        )
-        self.pack_end(self._link, expand=False, fill=False, padding=0)
-
-        self._link.connect("toggled", self._on_link_toggled)
-        self._on_link_toggled(self._link)
-
-        self._first_adj.connect("notify::value", self._on_scale_changed)
-        self._second_adj.connect("notify::value", self._on_scale_changed)
-        self._linked_adj.connect("notify::value", self._on_scale_changed)
-
-    def _on_scale_changed(self, target, _=None):
-        if self._link.props.active:
-            linked_value = int(self._linked_adj.props.value)
-
-            if linked_value == self._max_gap:
-                next_first_value = self._first_range[1]
-                next_second_value = self._second_range[1]
-            elif linked_value < self._max_gap:
-                next_first_value = self._first_range[0] + round(
-                    (self._first_range[1] - self._first_range[0])
-                    * (linked_value / self._max_gap)
-                )
-                next_second_value = self._second_range[1]
-            else:
-                next_first_value = self._first_range[1]
-                next_second_value = self._second_range[0] + round(
-                    (self._second_range[1] - self._second_range[0])
-                    * ((self._max_gap * 2 - linked_value) / self._max_gap)
-                )
-        else:
-            if target == self._first_adj:
-                next_first_value = int(target.props.value)
-                next_second_value = self._second_value
-            elif target == self._second_adj:
-                next_first_value = self._first_value
-                next_second_value = int(target.props.value)
-            else:
-                return
-
-        if next_first_value != self._first_value:
-            self._first_value = next_first_value
-            self.notify("first_value")
-
-        if next_second_value != self._second_value:
-            self._second_value = next_second_value
-            self.notify("second_value")
-
-    def _update_scales(self):
-        if self._link.props.active:
-            if self._first_value == self._first_range[1]:
-                linked_value = round(self._max_gap * (1 +
-                    (self._second_range[1] - self._second_value)
-                    / (self._second_range[1] - self._second_range[0])
-                ))
-            else:
-                linked_value = round(self._max_gap * (
-                    self._first_value
-                    / (self._first_range[1] - self._first_range[0])
-                ))
-
-            if int(self._linked_adj.props.value) != linked_value:
-                self._linked_adj.props.value = linked_value
-        else:
-            if int(self._first_adj.props.value) != self._first_value:
-                self._first_adj.props.value = self._first_value
-
-            if int(self._second_adj.props.value) != self._second_value:
-                self._second_adj.props.value = self._second_value
-
-    def _on_link_toggled(self, toggle):
-        if toggle.props.active:
-            self._linked_scale.show()
-            self._unlinked_scales.hide()
-        else:
-            self._unlinked_scales.show()
-            self._first_scale.show()
-            self._second_scale.show()
-            self._linked_scale.hide()
-
-        self._update_scales()
-
-    @GObject.Property(type=int, default=0)
-    def first_value(self):
-        return self._first_value
-
-    @first_value.setter
-    def first_value(self, value):
-        self._first_value = value
-        self._update_scales()
-
-    @GObject.Property(type=int, default=0)
-    def second_value(self):
-        return self._second_value
-
-    @second_value.setter
-    def second_value(self, value):
-        self._second_value = value
-        self._update_scales()
-
-
 class MicrophoneControlPage(Handy.PreferencesPage):
     def __init__(self, microphone):
         super().__init__()
         self._microphone = microphone
 
-        # Group: Volume
-        volume_group = Handy.PreferencesGroup(title="Volume")
-        volume_list = Gtk.ListBox(selection_mode="none")
-        volume_group.add(volume_list)
-        self.add(volume_group)
-
-        # Input volume
-        input_volume_row = Handy.ActionRow(title="Input volume")
-        input_volume_controls = Gtk.Box(spacing=6, hexpand=True)
-
-        input_volume_scale = Gtk.Scale(
-            hexpand=True,
-            draw_value=False,
-            round_digits=0,
-            digits=0,
-        )
-        input_volume_scale.set_range(0, 3600)
-        input_volume_scale.set_increments(100, 100)
-        self._microphone.bind_property(
-            "input_volume", input_volume_scale.get_adjustment(), "value",
-            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
-        )
-        input_volume_controls.add(input_volume_scale)
-
-        input_volume_mute = Gtk.ToggleButton(
-            image=Gtk.Image(icon_name="microphone-sensitivity-muted-symbolic"),
-            valign="center",
-            relief="none",
-        )
-        self._microphone.bind_property(
-            "input_mute", input_volume_mute, "active",
-            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
-        )
-        input_volume_mute.bind_property(
-            "active", input_volume_scale, "sensitive",
-            BindingFlags.INVERT_BOOLEAN | BindingFlags.SYNC_CREATE,
-        )
-        input_volume_controls.add(input_volume_mute)
-
-        input_volume_row.add(input_volume_controls)
-        input_volume_row.set_activatable_widget(input_volume_mute)
-        volume_list.add(input_volume_row)
+        # Group: Monitor
+        monitor_group = Handy.PreferencesGroup(title="Monitor")
+        monitor_list = Gtk.ListBox(selection_mode="none")
+        monitor_group.add(monitor_list)
+        self.add(monitor_group)
 
         # Monitor volume
         monitor_volume_row = Handy.ActionRow(title="Monitor volume")
@@ -349,7 +117,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
 
         monitor_volume_row.add(monitor_volume_controls)
         monitor_volume_row.set_activatable_widget(monitor_volume_mute)
-        volume_list.add(monitor_volume_row)
+        monitor_list.add(monitor_volume_row)
 
         # Monitor mix
         monitor_mix_row = Handy.ActionRow(title="Monitor mix")
@@ -369,13 +137,90 @@ class MicrophoneControlPage(Handy.PreferencesPage):
         )
 
         monitor_mix_row.add(monitor_mix_control)
-        volume_list.add(monitor_mix_row)
+        monitor_list.add(monitor_mix_row)
 
-        # Group: Compressor
-        compressor_group = Handy.PreferencesGroup(title="Compressor")
-        compressor_list = Gtk.ListBox(selection_mode="none")
-        compressor_group.add(compressor_list)
-        self.add(compressor_group)
+        # Group: Signal
+        signal_group = Handy.PreferencesGroup(title="Signal")
+        self.add(signal_group)
+
+        # Switch between auto and manual modes
+        mode_stack = Gtk.Stack(
+            transition_type=Gtk.StackTransitionType.CROSSFADE,
+            vhomogeneous=False,
+            interpolate_size=True,
+        )
+        mode_stack_switcher = Gtk.StackSwitcher(
+            stack=mode_stack,
+            hexpand=True,
+            homogeneous=False,
+            halign="end",
+            valign="center"
+        )
+
+        def mode_transform_forward(_, mode):
+            if mode == Mode.Manual:
+                return "manual"
+            else:
+                return "auto"
+
+        def mode_transform_backward(_, name):
+            if name == "manual":
+                return Mode.Manual
+            else:
+                return Mode.Auto
+
+        self._microphone.bind_property(
+            "mode", mode_stack, "visible-child-name",
+            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+            mode_transform_forward,
+            mode_transform_backward,
+        )
+
+        mode_stack_switcher_row = Handy.ActionRow(title="Mode")
+        mode_stack_switcher_row.add(mode_stack_switcher)
+        signal_group.add(mode_stack_switcher_row)
+        signal_group.add(mode_stack)
+
+        # Mode: Manual
+        manual_list = Gtk.ListBox(selection_mode="none")
+        mode_stack.add_titled(manual_list, "manual", "Manual")
+
+        # Input volume
+        input_volume_row = Handy.ActionRow(title="Input volume")
+        input_volume_controls = Gtk.Box(spacing=6, hexpand=True)
+
+        input_volume_scale = Gtk.Scale(
+            hexpand=True,
+            draw_value=False,
+            round_digits=0,
+            digits=0,
+        )
+        input_volume_scale.set_range(0, 3600)
+        input_volume_scale.set_increments(100, 100)
+        self._microphone.bind_property(
+            "input_volume", input_volume_scale.get_adjustment(), "value",
+            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+        )
+        input_volume_controls.add(input_volume_scale)
+
+        input_volume_mute = Gtk.ToggleButton(
+            image=Gtk.Image(icon_name="microphone-sensitivity-muted-symbolic"),
+            valign="center",
+            relief="none",
+        )
+        self._microphone.bind_property(
+            "input_mute", input_volume_mute, "active",
+            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+        )
+        input_volume_mute.bind_property(
+            "active", input_volume_scale, "sensitive",
+            BindingFlags.INVERT_BOOLEAN | BindingFlags.SYNC_CREATE,
+        )
+        input_volume_controls.add(input_volume_mute)
+
+        input_volume_row.add(input_volume_controls)
+        input_volume_row.set_activatable_widget(input_volume_mute)
+        manual_list.add(input_volume_row)
 
         # Compressor
         compressor_row = Handy.ActionRow(title="Compressor")
@@ -415,7 +260,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
             }
         )
         compressor_row.add(compressor_controls)
-        compressor_list.add(compressor_row)
+        manual_list.add(compressor_row)
 
         # Limiter
         limiter_row = Handy.ActionRow(title="Limiter")
@@ -426,13 +271,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
         )
         limiter_row.add(limiter_switch)
         limiter_row.set_activatable_widget(limiter_switch)
-        compressor_list.add(limiter_row)
-
-        # Group: Equalizer
-        equalizer_group = Handy.PreferencesGroup(title="Equalizer")
-        equalizer_list = Gtk.ListBox(selection_mode="none")
-        equalizer_group.add(equalizer_list)
-        self.add(equalizer_group)
+        manual_list.add(limiter_row)
 
         # High pass filter
         high_pass_row = Handy.ActionRow(title="High pass filter")
@@ -443,7 +282,7 @@ class MicrophoneControlPage(Handy.PreferencesPage):
         )
         high_pass_row.add(high_pass_switch)
         high_pass_row.set_activatable_widget(high_pass_switch)
-        equalizer_list.add(high_pass_row)
+        manual_list.add(high_pass_row)
 
         # Presence filter
         presence_row = Handy.ActionRow(title="Presence filter")
@@ -454,7 +293,83 @@ class MicrophoneControlPage(Handy.PreferencesPage):
         )
         presence_row.add(presence_switch)
         presence_row.set_activatable_widget(presence_switch)
-        equalizer_list.add(presence_row)
+        manual_list.add(presence_row)
+
+        # Group: Auto
+        auto_list = Gtk.ListBox(selection_mode="none")
+        mode_stack.add_titled(auto_list, "auto", "Automatic")
+
+        # Mute
+        input_mute_row = Handy.ActionRow(title="Input mute")
+        input_mute_switch = Gtk.Switch(valign="center")
+        self._microphone.bind_property(
+            "input_mute", input_mute_switch, "active",
+            BindingFlags.BIDIRECTIONAL | BindingFlags.SYNC_CREATE,
+        )
+        input_mute_row.add(input_mute_switch)
+        input_mute_row.set_activatable_widget(input_mute_switch)
+        auto_list.add(input_mute_row)
+
+        # Distance
+        auto_distance_row = Handy.ActionRow(title="Distance")
+        auto_distance_controls = Gtk.Box(hexpand=True, valign="center", halign="end")
+        auto_distance_controls.get_style_context().add_class("linked")
+
+        auto_distance_close_button = Gtk.RadioButton.new_with_label_from_widget(
+            None, "Close"
+        )
+        auto_distance_close_button.set_mode(False)
+        auto_distance_controls.add(auto_distance_close_button)
+
+        auto_distance_far_button = Gtk.RadioButton.new_with_label_from_widget(
+            auto_distance_close_button, "Far"
+        )
+        auto_distance_far_button.set_mode(False)
+        auto_distance_controls.add(auto_distance_far_button)
+
+        self.auto_distance_binding = BindRadio(
+            self._microphone, "auto-distance", {
+                None: DistanceState.Off,
+                auto_distance_close_button: DistanceState.Close,
+                auto_distance_far_button: DistanceState.Far,
+            }
+        )
+        auto_distance_row.add(auto_distance_controls)
+        auto_list.add(auto_distance_row)
+
+        # Tone
+        auto_tone_row = Handy.ActionRow(title="Tone")
+        auto_tone_controls = Gtk.Box(hexpand=True, valign="center", halign="end")
+        auto_tone_controls.get_style_context().add_class("linked")
+
+        auto_tone_neutral_button = Gtk.RadioButton.new_with_label_from_widget(
+            None, "Neutral"
+        )
+        auto_tone_neutral_button.set_mode(False)
+        auto_tone_controls.add(auto_tone_neutral_button)
+
+        auto_tone_dark_button = Gtk.RadioButton.new_with_label_from_widget(
+            auto_tone_neutral_button, "Dark"
+        )
+        auto_tone_dark_button.set_mode(False)
+        auto_tone_controls.add(auto_tone_dark_button)
+
+        auto_tone_bright_button = Gtk.RadioButton.new_with_label_from_widget(
+            auto_tone_neutral_button, "Bright"
+        )
+        auto_tone_bright_button.set_mode(False)
+        auto_tone_controls.add(auto_tone_bright_button)
+
+        self.auto_tone_binding = BindRadio(
+            self._microphone, "auto-tone", {
+                None: ToneState.Off,
+                auto_tone_neutral_button: ToneState.Neutral,
+                auto_tone_dark_button: ToneState.Dark,
+                auto_tone_bright_button: ToneState.Bright,
+            }
+        )
+        auto_tone_row.add(auto_tone_controls)
+        auto_list.add(auto_tone_row)
 
 
 class AppState(Enum):
